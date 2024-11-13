@@ -2,10 +2,16 @@
 error_reporting(E_ERROR);
 header("access-control-allow-origin: *");
 define("TILE_SIZE", 256);
+define("VERSION", 1);
 require_once "parsers.php";
 
 if (!isset($_REQUEST["x"]) || !isset($_REQUEST["y"]) || !isset($_REQUEST["z"])) {
     die("Missing Parameter");
+}
+
+$cached = true;
+if (isset($_REQUEST["nocache"])) {
+    $cached = false;
 }
 
 $x = $_REQUEST["x"];
@@ -44,8 +50,35 @@ require_once "settings.php";
 $conn = pg_pconnect($dbconn_str)
     or die('Could not connect: ' . pg_last_error());
 
+if ($cached) {
+    $query = 'SELECT "data","version" FROM road_cached WHERE x=$1 AND y=$2 AND z=$3';
+    pg_prepare($conn, "rqx1", $query);
+    $result = pg_execute($conn, "rqx1", [$x, $y, $z]);
+    if (!$result) {
+        print(pg_last_error());
+    }
+    $arr = pg_fetch_all($result);
+    if (count($arr) > 0) {
+        $data = $arr[0]["data"];
+        $version = $arr[0]["version"];
+        if ($version == VERSION) {
+            $data = $data;
+            header('Content-Type: image/svg+xml');
+            header('Cached: true');
+            if (isset($_REQUEST["datauri"])) {
+                header('Content-Type: text/plain');
+                //data uri in body
+                echo "data:image/svg+xml;base64," . base64_encode($data);
+            } else {
+                header('Content-Type: image/svg+xml');
+                echo $data;
+            }
+            exit();
+        }
+    }
+}
 $sub = get_appearance($z);
-$query = 'SELECT "z_order","highway","construction",ST_AsGeoJSON(ST_Transform(way,4326)) from planet_osm_line where ST_Intersects(ST_TileEnvelope(' . $z . ', ' . $x . ', ' . $y . '),way) AND highway IS NOT NULL' . $sub . ' LIMIT 2000;';
+$query = 'SELECT "z_order","highway","construction",ST_AsGeoJSON(ST_Transform(way,4326)) from planet_osm_line where ST_Intersects(ST_TileEnvelope(' . $z . ', ' . $x . ', ' . $y . '),way) AND highway IS NOT NULL' . $sub . ' LIMIT 8000;';
 $result = pg_query($conn, $query);
 if (!$result) {
     print(pg_last_error());
@@ -101,5 +134,18 @@ for ($i = 0; $i < count($res); $i++) {
     $doc->addChild($polyline);
 }
 
-header('Content-Type: image/svg+xml');
-echo $image;
+// echo $image;
+if (isset($_REQUEST["datauri"])) {
+    header('Content-Type: text/plain');
+    //data uri in body
+    echo "data:image/svg+xml;base64," . base64_encode($image);
+} else {
+    header('Content-Type: image/svg+xml');
+    echo $image;
+}
+
+$image = $image;
+
+$query = 'INSERT INTO road_cached (x,y,z,data,version) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (x,y,z) DO UPDATE SET data=$4,version=$5';
+pg_prepare($conn, "rq3", $query);
+pg_execute($conn, "rq3", [$x, $y, $z, $image, VERSION]);

@@ -57,6 +57,45 @@ function get_color($building, $landuse, $natural, $leisure, $amenity)
     return "none";
 }
 
+function get_pol_text_color($building, $landuse, $natural, $leisure, $amenity)
+{
+    if (!is_null($landuse)) {
+        if ($landuse == "commercial" || $landuse == "retail") {
+            return "#9749cf";
+        }
+        if ($landuse == "residential") {
+            return "#959da9";
+        }
+        if ($landuse == "meadow") {
+            return "#54a373";
+        }
+    }
+    if (!is_null($amenity)) {
+        if ($amenity == "university" || $amenity == "school" || $amenity == "college") {
+            return "#5aa6b3";
+        }
+        if ($amenity == "hospital" || $amenity == "clinic") {
+            return "#db4250";
+        }
+        if ($amenity == "exhibition_centre") {
+            return "#b3998d";
+        }
+    }
+    if (!is_null($leisure)) {
+        return "#54a373";
+    }
+    if (!is_null($natural)) {
+        if ($natural == "water" || $natural == "strait") {
+            return "#023e91";
+        }
+    }
+    if (!is_null($building)) {
+        return "#6b7ba5";
+    }
+    //return "#000000"; //for test
+    return "#6b7ba5";
+}
+
 function get_appearance($z)
 {
     $possible = ["motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link", "secondary", "secondary_link", "tertiary", "tertiary_link"];

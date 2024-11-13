@@ -2,15 +2,9 @@
 error_reporting(E_ERROR);
 header("access-control-allow-origin: *");
 define("TILE_SIZE", 256);
-define("VERSION", 1);
 
 if (!isset($_REQUEST["x"]) || !isset($_REQUEST["y"]) || !isset($_REQUEST["z"])) {
     die("Missing Parameter");
-}
-
-$cached = true;
-if (isset($_REQUEST["nocache"])) {
-    $cached = false;
 }
 
 $x = $_REQUEST["x"];
@@ -65,33 +59,6 @@ require_once "settings.php";
 $s = sizeoftile1o10000($y, $z);
 $conn = pg_pconnect($dbconn_str)
     or die('Could not connect: ' . pg_last_error());
-if ($cached) {
-    $query = 'SELECT "data","version" FROM ONLY base_cached WHERE x=$1 AND y=$2 AND z=$3';
-    pg_prepare($conn, "bqx2", $query);
-    $result = pg_execute($conn, "bqx2", [$x, $y, $z]);
-    if (!$result) {
-        print(pg_last_error());
-    }
-    $arr = pg_fetch_all($result);
-    if (count($arr) > 0) {
-        $data = $arr[0]["data"];
-        $version = $arr[0]["version"];
-        if ($version == VERSION) {
-            $data = $data;
-            header('Content-Type: image/svg+xml');
-            header('Cached: true');
-            if (isset($_REQUEST["datauri"])) {
-                header('Content-Type: text/plain');
-                //data uri in body
-                echo "data:image/svg+xml;base64," . base64_encode($data);
-            } else {
-                header('Content-Type: image/svg+xml');
-                echo $data;
-            }
-            exit();
-        }
-    }
-}
 
 $query = 'SELECT "building","landuse","natural","leisure","amenity","name",ST_AsGeoJSON(ST_Transform(way,4326)) from planet_osm_polygon where ST_Intersects(ST_TileEnvelope($1, $2, $3),way) AND way_area>$4 LIMIT 2000;';
 pg_prepare($conn, "bq1", $query);
@@ -135,41 +102,46 @@ use SVG\Nodes\Texts\SVGText;
 
 $image = new SVG(TILE_SIZE, TILE_SIZE);
 $doc = $image->getDocument();
-$txts = [];
 
 for ($i = 0; $i < count($res); $i++) {
     $pol = $res[$i];
-    $polygon = new SVGPolygon();
     if ($pol["path"]["type"] != "Polygon") {
+        continue;
+    }
+    if ($pol["name"] == null) {
         continue;
     }
     if (is_null($pol["building"]) && is_null($pol["landuse"]) && is_null($pol["natural"]) && is_null($pol["leisure"]) && is_null($pol["amenity"])) {
         continue;
     }
+    $x_min = 256;
+    $x_max = 0;
+    $y_min = 256;
+    $y_max = 0;
     for ($j = 0; $j < count($pol["path"]["coordinates"][0]); $j++) {
         $coord = $pol["path"]["coordinates"][0][$j];
         $c = get_xy($coord[1], $coord[0], $lat_begin, $lon_begin, $lat_end, $lon_end);
-        $polygon->addPoint($c["x"], $c["y"]);
+        if ($c["x"] < $x_min) {
+            $x_min = $c["x"];
+        }
+        if ($c["x"] > $x_max) {
+            $x_max = $c["x"];
+        }
+        if ($c["y"] < $y_min) {
+            $y_min = $c["y"];
+        }
+        if ($c["y"] > $y_max) {
+            $y_max = $c["y"];
+        }
     }
-    $color = get_color($pol["building"], $pol["landuse"], $pol["natural"], $pol["leisure"], $pol["amenity"]);
-    $polygon->setStyle("fill", $color);
-    $polygon->setStyle("stroke", 'none');
-    $doc->addChild($polygon);
+    if ($pol["name"] != null) {
+        $text = new SVGText($pol["name"], ($x_min + $x_max) / 2, ($y_min + $y_max) / 2);
+        $text->setFontFamily('Arial');
+        $text->setFontSize('10');
+        $doc->addChild($text);
+    }
 }
 
-
-// echo $image;
-if (isset($_REQUEST["datauri"])) {
-    header('Content-Type: text/plain');
-    //data uri in body
-    echo "data:image/svg+xml;base64," . base64_encode($image);
-} else {
-    header('Content-Type: image/svg+xml');
-    echo $image;
-}
-
-$image = $image;
-
-$query = 'INSERT INTO base_cached (x,y,z,data,version) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (x,y,z) DO UPDATE SET data=$4,version=$5';
-pg_prepare($conn, "bq3", $query);
-pg_execute($conn, "bq3", [$x, $y, $z, $image, VERSION]);
+$doc->setStyle('overflow', 'visible');
+header('Content-Type: image/svg+xml');
+echo $image;
