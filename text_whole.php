@@ -7,6 +7,12 @@ if (!isset($_REQUEST["lat_begin"]) || !isset($_REQUEST["lon_begin"]) || !isset($
     die("Missing Parameter");
 }
 
+if (isset($_REQUEST["nost"])) {
+    $st = false;
+} else {
+    $st = true;
+}
+
 $lat_begin = $_REQUEST["lat_begin"];
 $lon_begin = $_REQUEST["lon_begin"];
 $lat_end = $_REQUEST["lat_end"];
@@ -144,9 +150,14 @@ for ($i = 0; $i < count($res); $i++) {
             $text->setFontFamily('Arial');
 
             $text->setFontSize($fontSize);
-            $text->setStyle('fill', $color);
-            $text->setStyle('stroke', 'white');
-            $text->setStyle('stroke-width', '0.5');
+
+            if ($st) {
+                $text->setStyle('fill', $color);
+                $text->setStyle('stroke', 'white');
+                $text->setStyle('stroke-width', '0.5');
+            } else {
+                $text->setStyle('fill', make_brighter($color));
+            }
             $text->setStyle('paint-order', 'stroke');
             $text->setFontSize('11');
             $text->setStyle('text-anchor', 'middle');

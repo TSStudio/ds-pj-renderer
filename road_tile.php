@@ -2,7 +2,7 @@
 error_reporting(E_ERROR);
 header("access-control-allow-origin: *");
 define("TILE_SIZE", 256);
-define("VERSION", 1);
+define("VERSION", 3);
 require_once "parsers.php";
 
 if (!isset($_REQUEST["x"]) || !isset($_REQUEST["y"]) || !isset($_REQUEST["z"])) {
@@ -122,11 +122,34 @@ for ($i = 0; $i < count($res); $i++) {
         $polyline->addPoint($c["x"], $c["y"]);
     }
     $construction = $pol["highway"] == "construction";
+    $color = get_color_stroke_road($construction ? $pol["construction"] : $pol["highway"]);
+    $polyline->setStyle("fill", 'none');
+    $polyline->setStyle("stroke", $color);
+    $polyline->setStyle("stroke-width", (get_width_road($construction ? $pol["construction"] : $pol["highway"], $z) * 1.1) . "px");
+    $polyline->setStyle("stroke-linejoin", "round");
+    if ($construction) {
+        $polyline->setStyle("stroke-dasharray", "8 4");
+    }
+    $doc->addChild($polyline);
+}
+
+for ($i = 0; $i < count($res); $i++) {
+    $pol = $res[$i];
+    $polyline = new SVGPolyline();
+    if ($pol["path"]["type"] != "LineString") {
+        continue;
+    }
+    for ($j = 0; $j < count($pol["path"]["coordinates"]); $j++) {
+        $coord = $pol["path"]["coordinates"][$j];
+        $c = get_xy($coord[1], $coord[0], $lat_begin, $lon_begin, $lat_end, $lon_end);
+        $polyline->addPoint($c["x"], $c["y"]);
+    }
+    $construction = $pol["highway"] == "construction";
 
     $color = get_color_road($construction ? $pol["construction"] : $pol["highway"]);
     $polyline->setStyle("fill", 'none');
     $polyline->setStyle("stroke", $color);
-    $polyline->setStyle("stroke-width", get_width_road($construction ? $pol["construction"] : $pol["highway"], $z));
+    $polyline->setStyle("stroke-width", (get_width_road($construction ? $pol["construction"] : $pol["highway"], $z) * 0.8) . "px");
     $polyline->setStyle("stroke-linejoin", "round");
     if ($construction) {
         $polyline->setStyle("stroke-dasharray", "8 4");
