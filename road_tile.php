@@ -2,7 +2,7 @@
 error_reporting(E_ERROR);
 header("access-control-allow-origin: *");
 define("TILE_SIZE", 256);
-define("VERSION", 3);
+define("VERSION", 4);
 require_once "parsers.php";
 
 if (!isset($_REQUEST["x"]) || !isset($_REQUEST["y"]) || !isset($_REQUEST["z"])) {

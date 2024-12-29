@@ -57,8 +57,13 @@ function get_color($building, $landuse, $natural, $leisure, $amenity)
     return "none";
 }
 
-function get_pol_text_color($building, $landuse, $natural, $leisure, $amenity)
+function get_pol_text_color($building, $landuse, $natural, $leisure, $amenity, $boundary)
 {
+    if (!is_null($boundary)) {
+        if ($boundary == "administrative") {
+            return "#222222";
+        }
+    }
     if (!is_null($landuse)) {
         if ($landuse == "commercial" || $landuse == "retail") {
             return "#9749cf";

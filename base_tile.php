@@ -2,7 +2,7 @@
 error_reporting(E_ERROR);
 header("access-control-allow-origin: *");
 define("TILE_SIZE", 256);
-define("VERSION", 1);
+define("VERSION", 2);
 
 if (!isset($_REQUEST["x"]) || !isset($_REQUEST["y"]) || !isset($_REQUEST["z"])) {
     die("Missing Parameter");

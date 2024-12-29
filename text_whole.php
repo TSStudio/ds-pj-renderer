@@ -3,7 +3,7 @@ error_reporting(E_ERROR);
 define("MARGIN", 5);
 header("access-control-allow-origin: *");
 
-if (!isset($_REQUEST["lat_begin"]) || !isset($_REQUEST["lon_begin"]) || !isset($_REQUEST["lat_end"]) || !isset($_REQUEST["lon_end"]) || !isset($_REQUEST["width"]) || !isset($_REQUEST["height"])) {
+if (!isset($_REQUEST["lat_begin"]) || !isset($_REQUEST["lon_begin"]) || !isset($_REQUEST["lat_end"]) || !isset($_REQUEST["lon_end"]) || !isset($_REQUEST["width"]) || !isset($_REQUEST["height"]) || !isset($_REQUEST["z"])) {
     die("Missing Parameter");
 }
 
@@ -19,6 +19,7 @@ $lat_end = $_REQUEST["lat_end"];
 $lon_end = $_REQUEST["lon_end"];
 $width = $_REQUEST["width"];
 $height = $_REQUEST["height"];
+$z = $_REQUEST["z"];
 
 if (!is_numeric($lat_begin) || !is_numeric($lon_begin) || !is_numeric($lat_end) || !is_numeric($lon_end) || !is_numeric($width) || !is_numeric($height)) {
     die("Invalid Parameter");
@@ -29,6 +30,7 @@ $lat_end = (float)$lat_end;
 $lon_end = (float)$lon_end;
 $width = (int)$width;
 $height = (int)$height;
+$z = (int)$z;
 
 
 function get_area_size($lat_begin, $lon_begin, $lat_end, $lon_end)
@@ -56,10 +58,10 @@ require_once "settings.php";
 $conn = pg_pconnect($dbconn_str)
     or die('Could not connect: ' . pg_last_error());
 
-$query = 'SELECT "building","landuse","natural","leisure","amenity","name",Box2D(ST_Transform(way,4326)) FROM planet_osm_polygon WHERE ST_Intersects(ST_Transform(ST_MakeEnvelope($1, $2, $3, $4 ,4326), 3857),way) AND way_area>$5 AND "name" IS NOT NULL ORDER BY way_area DESC LIMIT 2000;';
+$query = 'SELECT "admin_level","building","landuse","natural","leisure","amenity","boundary","name",Box2D(ST_Transform(way,4326)) FROM planet_osm_polygon WHERE ST_Intersects(ST_Transform(ST_MakeEnvelope($1, $2, $3, $4 ,4326), 3857),way) AND way_area>$5 AND "name" IS NOT NULL ORDER BY way_area DESC LIMIT 2000;';
 
-pg_prepare($conn, "tqr4", $query);
-$result = pg_execute($conn, "tqr4", [$lon_begin, $lat_begin, $lon_end, $lat_end, $area_size / 10000]);
+pg_prepare($conn, "tqr2", $query);
+$result = pg_execute($conn, "tqr2", [$lon_begin, $lat_begin, $lon_end, $lat_end, $area_size / 10000]);
 if (!$result) {
     print(pg_last_error());
 }
@@ -78,8 +80,16 @@ for ($i = 0; $i < count($arr); $i++) {
     $resp["natural"] = $arr[$i]["natural"];
     $resp["leisure"] = $arr[$i]["leisure"];
     $resp["amenity"] = $arr[$i]["amenity"];
+    $resp["boundary"] = $arr[$i]["boundary"];
+    $resp["admin_level"] = $arr[$i]["admin_level"];
     $resp["name"] = $arr[$i]["name"];
-    if (is_null($resp["building"]) && is_null($resp["landuse"]) && is_null($resp["natural"]) && is_null($resp["leisure"]) && is_null($resp["amenity"])) {
+    if (!is_null($resp["admin_level"]) && $resp["admin_level"] > 7) {
+        continue;
+    }
+    if (is_null($resp["building"]) && is_null($resp["landuse"]) && is_null($resp["natural"]) && is_null($resp["leisure"]) && is_null($resp["amenity"] && is_null($resp["boundary"]))) {
+        continue;
+    }
+    if ($resp["name"] == null) {
         continue;
     }
     $res[] = $resp;
@@ -99,12 +109,6 @@ static $textBoxes = [];
 
 for ($i = 0; $i < count($res); $i++) {
     $pol = $res[$i];
-    if ($pol["name"] == null) {
-        continue;
-    }
-    if (is_null($pol["building"]) && is_null($pol["landuse"]) && is_null($pol["natural"]) && is_null($pol["leisure"]) && is_null($pol["amenity"])) {
-        continue;
-    }
     //Bound alike BOX(116.5215969 39.88205650025122,116.540941 39.89148870025251)
     $bound = explode(",", $pol["bound"]);
     $bound[0] = substr($bound[0], 4);
@@ -122,7 +126,17 @@ for ($i = 0; $i < count($res); $i++) {
     if ($pol["name"] != null) {
         $x = ($x_min + $x_max) / 2;
         $y = ($y_min + $y_max) / 2;
-        $fontSize = 10;
+        $fontSize = 11;
+        if (!is_null($pol["boundary"])) {
+            if ($pol["boundary"] == "administrative") {
+                if ($z >= 13) {
+                    continue;
+                }
+                $fontSize = 16;
+            } else {
+                continue;
+            }
+        }
         $textWidth = strlen($pol["name"]) * $fontSize * 0.6;
         $textHeight = $fontSize;
         $newBox = [
@@ -145,7 +159,7 @@ for ($i = 0; $i < count($res); $i++) {
         }
 
         if (!$conflict) {
-            $color = get_pol_text_color($pol["building"], $pol["landuse"], $pol["natural"], $pol["leisure"], $pol["amenity"]);
+            $color = get_pol_text_color($pol["building"], $pol["landuse"], $pol["natural"], $pol["leisure"], $pol["amenity"], $pol["boundary"]);
             $text = new SVGText($pol["name"], $x, $y);
             $text->setFontFamily('Arial');
 
@@ -159,7 +173,7 @@ for ($i = 0; $i < count($res); $i++) {
                 $text->setStyle('fill', make_brighter($color));
             }
             $text->setStyle('paint-order', 'stroke');
-            $text->setFontSize('11');
+            //$text->setFontSize('11');
             $text->setStyle('text-anchor', 'middle');
             $text->setStyle('dominant-baseline', 'central');
             $doc->addChild($text);
